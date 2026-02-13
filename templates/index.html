@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BibTeX Manager</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <header>
+        <h1>BibTeX Manager</h1>
+        <nav>
+            <button id="btn-import" class="nav-btn">Import .bib</button>
+            <button id="btn-search" class="nav-btn">Search Paper</button>
+            <button id="btn-normalize" class="nav-btn">Normalize All</button>
+            <button id="btn-duplicates" class="nav-btn">Find Duplicates</button>
+            <button id="btn-llm-settings" class="nav-btn">LLM Settings</button>
+            <div class="export-dropdown-wrap">
+                <button id="btn-export" class="nav-btn primary">Export .bib</button>
+                <div id="export-dropdown" class="export-dropdown hidden">
+                    <button class="export-option" data-mode="detailed">Detailed (all fields)</button>
+                    <button class="export-option" data-mode="standard">Standard</button>
+                    <button class="export-option" data-mode="minimal">Minimal</button>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <main>
+        <div id="toolbar">
+            <input type="text" id="filter-input" placeholder="Filter entries...">
+            <select id="sort-select">
+                <option value="created_at">Recently Added</option>
+                <option value="year">Year</option>
+                <option value="author">Author</option>
+                <option value="title">Title</option>
+            </select>
+            <span id="entry-count"></span>
+        </div>
+
+        <div id="llm-toolbar" class="llm-toolbar">
+            <span class="llm-toolbar-label">LLM Actions:</span>
+            <button class="llm-preset-btn" data-preset="complete_fields">Complete Fields</button>
+            <button class="llm-preset-btn" data-preset="fix_format">Fix Format</button>
+            <button class="llm-preset-btn" data-preset="generate_abstract">Generate Abstract</button>
+            <button class="llm-preset-btn" data-preset="check_entry_type">Check Type</button>
+            <button class="llm-preset-btn llm-custom-btn" id="btn-llm-custom">Custom Prompt</button>
+            <span id="llm-selection-count" class="llm-selection-count"></span>
+        </div>
+
+        <div id="entry-table-container">
+            <table id="entry-table">
+                <thead>
+                    <tr>
+                        <th class="col-check"><input type="checkbox" id="select-all" title="Select all"></th>
+                        <th class="col-status"></th>
+                        <th class="col-key">Key</th>
+                        <th class="col-type">Type</th>
+                        <th class="col-author">Author</th>
+                        <th class="col-title">Title</th>
+                        <th class="col-venue">Venue</th>
+                        <th class="col-year">Year</th>
+                        <th class="col-actions">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="entry-tbody"></tbody>
+            </table>
+            <div id="empty-state" class="hidden">
+                <p>No entries yet. Import a .bib file or search for papers to get started.</p>
+            </div>
+        </div>
+    </main>
+
+    <!-- Import Modal -->
+    <div id="import-modal" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Import BibTeX</h2>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="drop-zone">
+                    <p>Drag &amp; drop a .bib file here, or click to select</p>
+                    <input type="file" id="file-input" accept=".bib,.bibtex,.txt" class="hidden">
+                </div>
+                <div id="import-preview" class="hidden">
+                    <h3>Preview</h3>
+                    <textarea id="import-textarea" rows="10" placeholder="Or paste BibTeX here..."></textarea>
+                </div>
+                <div id="import-results" class="hidden"></div>
+            </div>
+            <div class="modal-footer">
+                <button id="btn-import-paste" class="secondary">Paste BibTeX</button>
+                <button id="btn-import-submit" class="primary" disabled>Import</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Search Modal -->
+    <div id="search-modal" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h2>Search Paper</h2>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="search-input-row">
+                    <input type="text" id="search-input" placeholder="Enter DOI, arXiv ID, or title...">
+                    <button id="btn-search-go" class="primary">Search</button>
+                </div>
+                <p class="hint">Examples: 2312.00752 &middot; 10.1109/CVPR.2024.1234 &middot; Attention Is All You Need</p>
+                <div id="search-status" class="hidden"></div>
+                <div id="search-results" class="hidden"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Editor Panel -->
+    <div id="editor-panel" class="hidden">
+        <div class="editor-header">
+            <h2>Edit Entry</h2>
+            <button id="btn-editor-close">&times;</button>
+        </div>
+        <div class="editor-body">
+            <form id="editor-form">
+                <input type="hidden" id="edit-id">
+                <div class="form-row">
+                    <label>Citation Key</label>
+                    <input type="text" id="edit-citation_key">
+                </div>
+                <div class="form-row">
+                    <label>Entry Type</label>
+                    <select id="edit-entry_type">
+                        <option value="article">article</option>
+                        <option value="inproceedings">inproceedings</option>
+                        <option value="book">book</option>
+                        <option value="incollection">incollection</option>
+                        <option value="phdthesis">phdthesis</option>
+                        <option value="mastersthesis">mastersthesis</option>
+                        <option value="techreport">techreport</option>
+                        <option value="misc">misc</option>
+                        <option value="unpublished">unpublished</option>
+                    </select>
+                </div>
+                <div class="form-row">
+                    <label>Title</label>
+                    <input type="text" id="edit-title">
+                </div>
+                <div class="form-row">
+                    <label>Author</label>
+                    <textarea id="edit-author" rows="2"></textarea>
+                </div>
+                <div class="form-row two-col">
+                    <div>
+                        <label>Year</label>
+                        <input type="text" id="edit-year">
+                    </div>
+                    <div>
+                        <label>Month</label>
+                        <input type="text" id="edit-month">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <label>Journal</label>
+                    <input type="text" id="edit-journal">
+                </div>
+                <div class="form-row">
+                    <label>Booktitle</label>
+                    <input type="text" id="edit-booktitle">
+                </div>
+                <div class="form-row three-col">
+                    <div>
+                        <label>Volume</label>
+                        <input type="text" id="edit-volume">
+                    </div>
+                    <div>
+                        <label>Number</label>
+                        <input type="text" id="edit-number">
+                    </div>
+                    <div>
+                        <label>Pages</label>
+                        <input type="text" id="edit-pages">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <label>DOI</label>
+                    <input type="text" id="edit-doi">
+                </div>
+                <div class="form-row">
+                    <label>arXiv ID</label>
+                    <input type="text" id="edit-arxiv_id">
+                </div>
+                <div class="form-row">
+                    <label>URL</label>
+                    <input type="text" id="edit-url">
+                </div>
+                <div class="form-row">
+                    <label>Publisher</label>
+                    <input type="text" id="edit-publisher">
+                </div>
+                <div class="form-row">
+                    <label>Abstract</label>
+                    <textarea id="edit-abstract" rows="4"></textarea>
+                </div>
+            </form>
+            <div id="editor-validation"></div>
+            <div class="bibtex-preview">
+                <h3>BibTeX Preview</h3>
+                <pre id="bibtex-preview-code"></pre>
+            </div>
+        </div>
+        <div class="editor-footer">
+            <button id="btn-editor-delete" class="danger">Delete</button>
+            <button id="btn-editor-save" class="primary">Save</button>
+        </div>
+    </div>
+
+    <!-- Duplicates Modal -->
+    <div id="duplicates-modal" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h2>Duplicate Entries</h2>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="duplicates-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- LLM Settings Modal -->
+    <div id="llm-settings-modal" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>LLM Settings</h2>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-row">
+                    <label>Base URL (OpenAI-compatible)</label>
+                    <input type="text" id="llm-base-url" placeholder="https://api.openai.com/v1">
+                </div>
+                <div class="form-row">
+                    <label>API Key</label>
+                    <input type="password" id="llm-api-key" placeholder="sk-...">
+                </div>
+                <div class="form-row">
+                    <label>Model</label>
+                    <input type="text" id="llm-model" placeholder="gpt-4o-mini">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="btn-llm-settings-save" class="primary">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- LLM Custom Prompt Modal -->
+    <div id="llm-custom-modal" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Custom LLM Prompt</h2>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-row">
+                    <label>Instruction</label>
+                    <textarea id="llm-custom-prompt" rows="5" placeholder="Describe what changes you want the LLM to make to the selected entries..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="btn-llm-custom-submit" class="primary">Send to LLM</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- LLM Diff Preview Modal -->
+    <div id="llm-diff-modal" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h2>LLM Proposed Changes</h2>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="llm-diff-warnings" class="hidden"></div>
+                <div id="llm-diff-list"></div>
+            </div>
+            <div class="modal-footer">
+                <button id="btn-llm-diff-cancel" class="secondary">Cancel</button>
+                <button id="btn-llm-diff-apply" class="primary">Apply Selected Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast-container"></div>
+
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/table.js"></script>
+    <script src="/static/js/editor.js"></script>
+    <script src="/static/js/import.js"></script>
+    <script src="/static/js/search.js"></script>
+    <script src="/static/js/llm.js"></script>
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

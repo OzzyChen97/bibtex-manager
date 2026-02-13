@@ -1,0 +1,46 @@
+{
+  "article": {
+    "required": ["author", "title", "journal", "year"],
+    "recommended": ["volume", "number", "pages", "doi", "month"]
+  },
+  "inproceedings": {
+    "required": ["author", "title", "booktitle", "year"],
+    "recommended": ["pages", "doi", "publisher", "address", "month"]
+  },
+  "conference": {
+    "required": ["author", "title", "booktitle", "year"],
+    "recommended": ["pages", "doi", "publisher", "address", "month"]
+  },
+  "book": {
+    "required": ["author", "title", "publisher", "year"],
+    "recommended": ["volume", "series", "address", "edition", "doi"]
+  },
+  "inbook": {
+    "required": ["author", "title", "publisher", "year"],
+    "recommended": ["chapter", "pages", "volume", "series"]
+  },
+  "incollection": {
+    "required": ["author", "title", "booktitle", "publisher", "year"],
+    "recommended": ["editor", "pages", "doi"]
+  },
+  "phdthesis": {
+    "required": ["author", "title", "school", "year"],
+    "recommended": ["address", "month"]
+  },
+  "mastersthesis": {
+    "required": ["author", "title", "school", "year"],
+    "recommended": ["address", "month"]
+  },
+  "techreport": {
+    "required": ["author", "title", "institution", "year"],
+    "recommended": ["number", "address", "month"]
+  },
+  "misc": {
+    "required": ["author", "title"],
+    "recommended": ["year", "url", "note"]
+  },
+  "unpublished": {
+    "required": ["author", "title", "note"],
+    "recommended": ["year", "month"]
+  }
+}

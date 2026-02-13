@@ -1,0 +1,5 @@
+{
+  "base_url": "https://api.siliconflow.cn/v1/chat/completions",
+  "api_key": "sk-nbhhwvujvsakgsczwwzbxcizlnhdplbvicbwdejciycibdjo",
+  "model": "deepseek-ai/DeepSeek-V3.2"
+}

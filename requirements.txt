@@ -1,0 +1,6 @@
+flask>=3.0
+bibtexparser>=1.4,<2.0
+scholarly>=1.7
+requests>=2.31
+python-Levenshtein>=0.21
+unidecode>=1.3
