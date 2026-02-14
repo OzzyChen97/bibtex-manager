@@ -14,6 +14,11 @@ def _load_field_rules() -> dict:
         return _field_rules
     data_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                              'data', 'field_rules.json')
+    # PyInstaller compatibility
+    import sys
+    if getattr(sys, 'frozen', False):
+        from config import BASE_PATH
+        data_path = os.path.join(BASE_PATH, 'data', 'field_rules.json')
     with open(data_path) as f:
         _field_rules = json.load(f)
     return _field_rules

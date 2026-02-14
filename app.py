@@ -5,7 +5,7 @@ import os
 from flask import Flask, request, jsonify, send_file, render_template
 from io import BytesIO
 
-from config import DATABASE, SCHOLAR_PROXY, SCHOLAR_MIN_DELAY, SCHOLAR_MAX_DELAY, USE_ABBREVIATIONS, PORT, DEBUG
+from config import DATABASE, SCHOLAR_PROXY, SCHOLAR_MIN_DELAY, SCHOLAR_MAX_DELAY, USE_ABBREVIATIONS, PORT, DEBUG, BASE_PATH
 from models.database import Database
 from models.entry import BibEntry
 from services.parser import parse_bibtex, entries_to_bibtex, entry_to_bibtex
@@ -19,7 +19,9 @@ from apis.resolver import Resolver
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = Flask(__name__)
+app = Flask(__name__,
+            template_folder=os.path.join(BASE_PATH, 'templates'),
+            static_folder=os.path.join(BASE_PATH, 'static'))
 db = Database(DATABASE)
 resolver = Resolver(
     scholar_proxy=SCHOLAR_PROXY,
@@ -477,4 +479,8 @@ def llm_apply():
 
 
 if __name__ == '__main__':
+    import webbrowser, threading
+    def _open_browser():
+        webbrowser.open(f'http://127.0.0.1:{PORT}')
+    threading.Timer(1.5, _open_browser).start()
     app.run(host='0.0.0.0', port=PORT, debug=DEBUG)

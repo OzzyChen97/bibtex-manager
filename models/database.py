@@ -2,6 +2,7 @@ import sqlite3
 import json
 import os
 from models.entry import BibEntry
+from config import BASE_PATH
 
 
 class Database:
@@ -16,7 +17,7 @@ class Database:
         return conn
 
     def _init_db(self):
-        schema_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'schema.sql')
+        schema_path = os.path.join(BASE_PATH, 'schema.sql')
         with open(schema_path) as f:
             schema = f.read()
         conn = self._get_conn()

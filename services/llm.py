@@ -6,10 +6,13 @@ import re
 import httpx
 
 from models.entry import BibEntry
+from config import BASE_PATH, DATA_PATH
 
 logger = logging.getLogger(__name__)
 
-CONFIG_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data', 'llm_config.json')
+CONFIG_PATH = os.path.join(DATA_PATH, 'data', 'llm_config.json')
+# Fallback: if data dir doesn't exist in DATA_PATH, use BASE_PATH (bundled default)
+_BUNDLED_CONFIG_PATH = os.path.join(BASE_PATH, 'data', 'llm_config.json')
 
 VALID_ENTRY_TYPES = {
     'article', 'inproceedings', 'book', 'incollection', 'phdthesis',
@@ -60,11 +63,13 @@ PRESET_PROMPTS = {
 
 def load_config() -> dict:
     """Load LLM configuration from file."""
-    try:
-        with open(CONFIG_PATH, 'r') as f:
-            return json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        return {'base_url': '', 'api_key': '', 'model': ''}
+    for path in [CONFIG_PATH, _BUNDLED_CONFIG_PATH]:
+        try:
+            with open(path, 'r') as f:
+                return json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            continue
+    return {'base_url': '', 'api_key': '', 'model': ''}
 
 
 def save_config(config: dict) -> None:
@@ -74,6 +79,7 @@ def save_config(config: dict) -> None:
         'api_key': str(config.get('api_key', '')).strip(),
         'model': str(config.get('model', '')).strip(),
     }
+    os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
     with open(CONFIG_PATH, 'w') as f:
         json.dump(safe, f, indent=2)
 

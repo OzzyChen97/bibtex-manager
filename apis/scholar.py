@@ -2,7 +2,12 @@
 import time
 import random
 import logging
-from scholarly import scholarly, ProxyGenerator
+
+try:
+    from scholarly import scholarly, ProxyGenerator
+    HAS_SCHOLARLY = True
+except ImportError:
+    HAS_SCHOLARLY = False
 
 logger = logging.getLogger(__name__)
 
@@ -14,6 +19,10 @@ class ScholarClient:
         self.min_delay = min_delay
         self.max_delay = max_delay
         self._last_request_time = 0
+
+        if not HAS_SCHOLARLY:
+            logger.warning("scholarly not available — Google Scholar features disabled")
+            return
 
         if proxy:
             pg = ProxyGenerator()
@@ -29,10 +38,9 @@ class ScholarClient:
         self._last_request_time = time.time()
 
     def search_and_get_bibtex(self, query: str, max_results: int = 5) -> list[dict]:
-        """Search Google Scholar and return results with BibTeX.
-
-        Returns list of dicts with keys: title, authors, year, venue, bibtex, url
-        """
+        """Search Google Scholar and return results with BibTeX."""
+        if not HAS_SCHOLARLY:
+            return []
         results = []
         try:
             self._wait()
@@ -55,10 +63,9 @@ class ScholarClient:
         return results
 
     def get_bibtex_for_title(self, title: str, venue: str = None) -> str | None:
-        """Search for a specific paper and return its BibTeX.
-
-        If venue is provided, search with venue to find published version.
-        """
+        """Search for a specific paper and return its BibTeX."""
+        if not HAS_SCHOLARLY:
+            return None
         query = f'"{title}"'
         if venue:
             query = f'"{title}" {venue}'

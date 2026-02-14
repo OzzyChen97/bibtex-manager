@@ -13,6 +13,11 @@ def _load_abbreviations() -> dict:
         return _abbrev_cache
     data_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                              'data', 'journal_abbrevs.json')
+    # PyInstaller compatibility
+    import sys
+    if getattr(sys, 'frozen', False):
+        from config import BASE_PATH
+        data_path = os.path.join(BASE_PATH, 'data', 'journal_abbrevs.json')
     with open(data_path) as f:
         _abbrev_cache = json.load(f)
     return _abbrev_cache
