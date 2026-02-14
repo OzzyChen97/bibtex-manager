@@ -203,6 +203,89 @@ def import_bibtex():
     return jsonify(results)
 
 
+@app.route('/api/import/resolve-duplicate', methods=['POST'])
+def resolve_duplicate():
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+
+    action = data.get('action')
+    new_entry_data = data.get('new_entry')
+    existing_entry_id = data.get('existing_entry_id')
+
+    if action not in ('skip', 'import_anyway', 'replace'):
+        return jsonify({'error': 'Invalid action. Use: skip, import_anyway, replace'}), 400
+    if not new_entry_data:
+        return jsonify({'error': 'Missing new_entry data'}), 400
+
+    if action == 'skip':
+        return jsonify({'message': 'Skipped', 'action': 'skip'})
+
+    try:
+        # Reconstruct BibEntry from the dict
+        field_names = {f for f in BibEntry.__dataclass_fields__}
+        skip_fields = {'id', 'created_at', 'updated_at',
+                       'validation_status', 'validation_messages',
+                       'raw_bibtex', '_extra_fields'}
+        entry_kwargs = {}
+        for k, v in new_entry_data.items():
+            if k in field_names and k not in skip_fields:
+                # Skip None values for optional fields (keep only citation_key, entry_type, and non-None)
+                if v is not None or k in ('citation_key', 'entry_type'):
+                    entry_kwargs[k] = v if v is not None else ''
+        new_entry = BibEntry(**entry_kwargs)
+
+        existing_keys = {e.citation_key for e in db.get_all_entries()}
+
+        if action == 'import_anyway':
+            new_entry = normalize_entry(new_entry, existing_keys)
+            status, messages = validate_entry(new_entry)
+            new_entry.validation_status = status
+            new_entry.validation_messages = json.dumps(messages)
+            new_entry.raw_bibtex = entry_to_bibtex(new_entry)
+            new_entry.source = 'import'
+            entry_id = db.insert_entry(new_entry)
+            created = db.get_entry(entry_id)
+            return jsonify({'message': 'Imported', 'action': 'import_anyway', 'entry': created.to_dict()}), 201
+
+        elif action == 'replace':
+            if existing_entry_id is None:
+                return jsonify({'error': 'Missing existing_entry_id for replace action'}), 400
+            existing_entry = db.get_entry(int(existing_entry_id))
+            if not existing_entry:
+                return jsonify({'error': 'Existing entry not found'}), 404
+
+            # Update existing entry fields with new entry data
+            updatable = [
+                'citation_key', 'entry_type', 'title', 'author', 'year', 'month',
+                'journal', 'booktitle', 'volume', 'number', 'pages', 'doi',
+                'arxiv_id', 'url', 'abstract', 'publisher', 'editor', 'series',
+                'address', 'organization', 'school', 'institution', 'note', 'keywords',
+            ]
+            for field in updatable:
+                val = new_entry_data.get(field)
+                if val is not None:
+                    setattr(existing_entry, field, val)
+
+            other_keys = existing_keys - {existing_entry.citation_key}
+            existing_entry = normalize_entry(existing_entry, other_keys)
+            status, messages = validate_entry(existing_entry)
+
+            updates = {k: v for k, v in existing_entry.to_dict().items()
+                       if k not in ('id', '_extra_fields', 'created_at', 'updated_at') and v is not None}
+            updates['validation_status'] = status
+            updates['validation_messages'] = json.dumps(messages)
+            updates['raw_bibtex'] = entry_to_bibtex(existing_entry)
+
+            db.update_entry(int(existing_entry_id), updates)
+            updated = db.get_entry(int(existing_entry_id))
+            return jsonify({'message': 'Replaced', 'action': 'replace', 'entry': updated.to_dict()})
+
+    except Exception as e:
+        logger.error(f"Resolve duplicate failed: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/export/bibtex', methods=['GET'])
 def export_bibtex():
     entries = db.get_all_for_export()

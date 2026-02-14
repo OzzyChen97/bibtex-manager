@@ -104,7 +104,19 @@ const LLM = {
 
     // ── Core: Propose ───────────────────────────────────────
     async propose(entryIds, preset, customPrompt) {
-        App.toast('Calling LLM...', 'info');
+        const overlay = document.getElementById('llm-loading-overlay');
+        const loadingText = document.getElementById('llm-loading-text');
+
+        // Show loading overlay with context
+        const presetLabels = {
+            complete_fields: 'Complete Fields',
+            fix_format: 'Fix Format',
+            generate_abstract: 'Generate Abstract',
+            check_entry_type: 'Check Type',
+        };
+        const label = preset ? (presetLabels[preset] || preset) : 'Custom Prompt';
+        loadingText.textContent = `Running "${label}" on ${entryIds.length} entry${entryIds.length > 1 ? 's' : ''}...`;
+        overlay.classList.remove('hidden');
 
         // Disable all LLM buttons during request
         const btns = document.querySelectorAll('.llm-preset-btn');
@@ -117,6 +129,7 @@ const LLM = {
                 custom_prompt: customPrompt,
             });
 
+            overlay.classList.add('hidden');
             btns.forEach(b => b.disabled = false);
 
             if (!result.proposals || result.proposals.length === 0) {
@@ -130,6 +143,7 @@ const LLM = {
 
             this.showDiff(result.proposals, result.filtered || []);
         } catch (e) {
+            overlay.classList.add('hidden');
             btns.forEach(b => b.disabled = false);
             App.toast('LLM error: ' + e.message, 'error');
         }

@@ -113,25 +113,41 @@ const Import = {
             html += `<div class="result-summary success">Successfully imported ${imported.length} entries.</div>`;
         } else {
             html += `<div class="result-summary has-issues">
-                Imported: ${imported.length} | Duplicates skipped: ${duplicates.length} | Errors: ${errors.length}
+                Imported: ${imported.length} | Duplicates: ${duplicates.length} | Errors: ${errors.length}
             </div>`;
         }
 
         if (duplicates.length > 0) {
             html += '<h4 style="margin: 12px 0 8px;">Duplicates Found</h4>';
-            duplicates.forEach(d => {
-                html += `<div class="dup-card">
+            duplicates.forEach((d, idx) => {
+                const newAuthor = d.new_entry.author || '';
+                const newYear = d.new_entry.year || '';
+                const existAuthor = d.existing_entry.author || '';
+                const existYear = d.existing_entry.year || '';
+                html += `<div class="dup-card" id="dup-card-${idx}">
                     <span class="confidence">${(d.confidence * 100).toFixed(0)}% match - ${Table.esc(d.reason)}</span>
                     <div class="entries">
                         <div class="entry-brief">
                             <strong>New</strong>
                             ${Table.esc(d.new_entry.title || '')}
+                            <div style="font-size:0.78rem;color:var(--text-secondary);margin-top:4px;">
+                                ${Table.esc(newAuthor)}${newYear ? ' (' + Table.esc(newYear) + ')' : ''}
+                            </div>
                         </div>
                         <div class="entry-brief">
                             <strong>Existing</strong>
                             ${Table.esc(d.existing_entry.title || '')}
+                            <div style="font-size:0.78rem;color:var(--text-secondary);margin-top:4px;">
+                                ${Table.esc(existAuthor)}${existYear ? ' (' + Table.esc(existYear) + ')' : ''}
+                            </div>
                         </div>
                     </div>
+                    <div class="dup-actions" style="margin-top:10px;display:flex;gap:8px;">
+                        <button class="secondary dup-btn" data-action="skip" data-idx="${idx}">Skip</button>
+                        <button class="primary dup-btn" data-action="import_anyway" data-idx="${idx}">Import Anyway</button>
+                        <button class="secondary dup-btn" data-action="replace" data-idx="${idx}" style="border-color:var(--warning);color:var(--warning);">Replace Existing</button>
+                    </div>
+                    <div class="dup-status" style="display:none;margin-top:8px;font-size:0.85rem;font-weight:600;"></div>
                 </div>`;
             });
         }
@@ -146,5 +162,55 @@ const Import = {
         }
 
         div.innerHTML = html;
+
+        // Attach duplicate action button handlers
+        div.querySelectorAll('.dup-btn').forEach(btn => {
+            btn.addEventListener('click', () => this.handleDuplicateAction(btn, duplicates));
+        });
+    },
+
+    async handleDuplicateAction(btn, duplicates) {
+        const idx = parseInt(btn.dataset.idx);
+        const action = btn.dataset.action;
+        const dup = duplicates[idx];
+        const card = document.getElementById(`dup-card-${idx}`);
+        const actionsDiv = card.querySelector('.dup-actions');
+        const statusDiv = card.querySelector('.dup-status');
+
+        // Disable all buttons in this card
+        card.querySelectorAll('.dup-btn').forEach(b => b.disabled = true);
+
+        if (action === 'skip') {
+            card.style.opacity = '0.5';
+            actionsDiv.style.display = 'none';
+            statusDiv.style.display = 'block';
+            statusDiv.style.color = 'var(--text-secondary)';
+            statusDiv.textContent = 'Skipped';
+            return;
+        }
+
+        try {
+            const data = {
+                action: action,
+                new_entry: dup.new_entry,
+                existing_entry_id: dup.existing_entry.id,
+            };
+            await API.resolveDuplicate(data);
+
+            actionsDiv.style.display = 'none';
+            statusDiv.style.display = 'block';
+
+            if (action === 'import_anyway') {
+                statusDiv.style.color = 'var(--success)';
+                statusDiv.textContent = 'Imported';
+            } else if (action === 'replace') {
+                statusDiv.style.color = 'var(--primary)';
+                statusDiv.textContent = 'Replaced';
+            }
+            Table.load();
+        } catch (e) {
+            App.toast('Failed: ' + e.message, 'error');
+            card.querySelectorAll('.dup-btn').forEach(b => b.disabled = false);
+        }
     },
 };

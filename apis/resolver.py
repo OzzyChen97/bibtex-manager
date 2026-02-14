@@ -12,7 +12,7 @@ Core pipeline:
 import re
 import logging
 from models.entry import BibEntry
-from services.parser import parse_bibtex
+from services.parser import parse_bibtex, entry_to_bibtex
 from services.normalizer import normalize_entry
 from apis.scholar import ScholarClient
 from apis.semantic_scholar import SemanticScholarClient
@@ -107,18 +107,65 @@ class Resolver:
             if paper:
                 results.append(paper)
         else:
-            # Search via Scholar
-            scholar_results = self.scholar.search_and_get_bibtex(query, max_results=max_results)
-            for sr in scholar_results:
-                results.append({
-                    'title': sr.get('title', ''),
-                    'authors': sr.get('authors', ''),
-                    'year': sr.get('year', ''),
-                    'venue': sr.get('venue', ''),
-                    'bibtex': sr.get('bibtex'),
-                    'source': 'scholar',
-                    'is_published': bool(sr.get('venue')),
-                })
+            # Primary: search via Semantic Scholar
+            s2_results = self.s2.search_paper(query, limit=max_results)
+            for sp in s2_results:
+                is_pub = self.s2.is_published(sp)
+                venue = sp.get('venue', '')
+                pub_venue = sp.get('publication_venue')
+                if pub_venue and pub_venue.get('name'):
+                    venue = pub_venue['name']
+                result_item = {
+                    'title': sp.get('title', ''),
+                    'authors': sp.get('authors', ''),
+                    'year': sp.get('year', ''),
+                    'venue': venue,
+                    'bibtex': None,
+                    'source': 'semantic_scholar',
+                    'is_published': is_pub,
+                    'arxiv_id': sp.get('arxiv_id', ''),
+                    'doi': sp.get('doi', ''),
+                    'citation_count': sp.get('citation_count', 0),
+                }
+                # Construct published BibTeX for published papers
+                if is_pub:
+                    try:
+                        pub_entry = self._construct_entry_from_metadata(sp, arxiv_id=sp.get('arxiv_id') or None)
+                        if pub_entry:
+                            pub_entry = normalize_entry(pub_entry, set())
+                            result_item['published_bibtex'] = entry_to_bibtex(pub_entry)
+                    except Exception as e:
+                        logger.debug(f"Failed to construct bibtex for search result: {e}")
+                results.append(result_item)
+
+            # Optional enhancement: merge Google Scholar BibTeX if available
+            try:
+                scholar_results = self.scholar.search_and_get_bibtex(query, max_results=max_results)
+                for sr in scholar_results:
+                    sr_title = (sr.get('title', '') or '').lower().strip()
+                    matched = False
+                    for r in results:
+                        r_title = (r.get('title', '') or '').lower().strip()
+                        if sr_title and r_title and (sr_title in r_title or r_title in sr_title):
+                            if not r['bibtex'] and sr.get('bibtex'):
+                                r['bibtex'] = sr['bibtex']
+                            matched = True
+                            break
+                    if not matched and sr.get('bibtex'):
+                        results.append({
+                            'title': sr.get('title', ''),
+                            'authors': sr.get('authors', ''),
+                            'year': sr.get('year', ''),
+                            'venue': sr.get('venue', ''),
+                            'bibtex': sr.get('bibtex'),
+                            'source': 'scholar',
+                            'is_published': bool(sr.get('venue')),
+                            'arxiv_id': '',
+                            'doi': '',
+                            'citation_count': 0,
+                        })
+            except Exception as e:
+                logger.debug(f"Scholar search unavailable, using S2 only: {e}")
 
         return results
 
@@ -249,6 +296,34 @@ class Resolver:
                 source_info['bibtex_source'] = 'scholar'
                 return {'entry': entry, 'source_info': source_info, 'error': None}
 
+        # Fallback: search Semantic Scholar and construct entry from metadata
+        s2_results = self.s2.search_paper(title, limit=3)
+        if s2_results:
+            # Pick the best match by title similarity
+            best = None
+            best_sim = 0
+            title_lower = title.lower().strip()
+            for sp in s2_results:
+                sp_title = (sp.get('title', '') or '').lower().strip()
+                if sp_title == title_lower:
+                    best = sp
+                    break
+                # Substring match
+                if title_lower in sp_title or sp_title in title_lower:
+                    sim = len(sp_title) / max(len(title_lower), 1)
+                    if sim > best_sim:
+                        best_sim = sim
+                        best = sp
+            if not best and s2_results:
+                best = s2_results[0]
+
+            if best:
+                entry = self._construct_entry_from_metadata(best, arxiv_id=best.get('arxiv_id'))
+                if entry:
+                    entry = normalize_entry(entry, existing_keys)
+                    source_info['bibtex_source'] = 'semantic_scholar'
+                    return {'entry': entry, 'source_info': source_info, 'error': None}
+
         return {'entry': None, 'source_info': source_info,
                 'error': f'No results found for: {title}'}
 
@@ -264,7 +339,8 @@ class Resolver:
             pub_venue = s2_info.get('publication_venue')
             if pub_venue and pub_venue.get('name'):
                 venue = pub_venue['name']
-            return {
+
+            result = {
                 'title': s2_info.get('title', ''),
                 'authors': s2_info.get('authors', ''),
                 'year': s2_info.get('year', ''),
@@ -273,7 +349,20 @@ class Resolver:
                 'doi': s2_info.get('doi', ''),
                 'is_published': is_published,
                 'source': 'semantic_scholar',
+                'citation_count': s2_info.get('citation_count', 0),
             }
+
+            # When published, construct a BibTeX string for the published version
+            if is_published:
+                try:
+                    pub_entry = self._construct_entry_from_metadata(s2_info, arxiv_id=base_id)
+                    if pub_entry:
+                        pub_entry = normalize_entry(pub_entry, set())
+                        result['published_bibtex'] = entry_to_bibtex(pub_entry)
+                except Exception as e:
+                    logger.debug(f"Failed to construct published bibtex for {base_id}: {e}")
+
+            return result
 
         # Fallback to arXiv API
         arxiv_info = self.arxiv.get_by_id(arxiv_id)

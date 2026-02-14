@@ -69,4 +69,7 @@ const API = {
     updateLLMConfig(data) { return this.request('PUT', '/api/llm/config', data); },
     llmPropose(data) { return this.request('POST', '/api/llm/propose', data); },
     llmApply(data) { return this.request('POST', '/api/llm/apply', data); },
+
+    // Import duplicate resolution
+    resolveDuplicate(data) { return this.request('POST', '/api/import/resolve-duplicate', data); },
 };

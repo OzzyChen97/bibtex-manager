@@ -68,16 +68,32 @@ const Search = {
         const year = result.year || '';
         const venue = result.venue || '';
         const published = result.is_published ? '<span style="color:var(--success);">[Published]</span>' : '<span style="color:var(--text-secondary);">[Preprint]</span>';
+        const sourceLabel = result.source === 'semantic_scholar' ? '<span style="color:var(--primary);font-size:0.75rem;font-weight:600;">[Semantic Scholar]</span>' : result.source === 'scholar' ? '<span style="color:#ea580c;font-size:0.75rem;font-weight:600;">[Google Scholar]</span>' : '';
+        const citations = result.citation_count ? `<span style="color:var(--text-secondary);font-size:0.78rem;">Citations: ${result.citation_count}</span>` : '';
+
+        // For published papers, show published info and prefer published bibtex
+        let publishedInfo = '';
+        let bibtexToUse = result.published_bibtex || result.bibtex || '';
+        let btnLabel = 'Add to Library';
+        if (result.is_published && result.venue) {
+            publishedInfo = `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:var(--radius);padding:8px 12px;margin:8px 0;font-size:0.82rem;color:#166534;">
+                Published at: <strong>${Table.esc(result.venue)}</strong>${result.doi ? ' &middot; DOI: ' + Table.esc(result.doi) : ''}
+            </div>`;
+            if (result.published_bibtex) {
+                btnLabel = result.arxiv_id ? 'Add Published Version' : 'Add to Library';
+            }
+        }
 
         return `<div class="search-result-card">
             <h4>${Table.esc(title)}</h4>
             <div class="meta">
                 ${Table.esc(authors)}<br>
-                ${Table.esc(year)} ${venue ? '&middot; ' + Table.esc(venue) : ''} ${published}
+                ${Table.esc(year)} ${venue ? '&middot; ' + Table.esc(venue) : ''} ${published} ${sourceLabel} ${citations}
             </div>
+            ${publishedInfo}
             <div class="actions">
-                <button class="btn-add-result primary" data-index="${index}" data-query="${Table.esc(query)}" data-bibtex="${btoa(unescape(encodeURIComponent(result.bibtex || '')))}">
-                    Add to Library
+                <button class="btn-add-result primary" data-index="${index}" data-query="${Table.esc(query)}" data-title="${Table.esc(title)}" data-bibtex="${btoa(unescape(encodeURIComponent(bibtexToUse)))}">
+                    ${btnLabel}
                 </button>
             </div>
         </div>`;
@@ -85,9 +101,11 @@ const Search = {
 
     async addResult(btn) {
         btn.disabled = true;
+        const originalLabel = btn.textContent.trim();
         btn.textContent = 'Adding...';
 
         const query = btn.dataset.query;
+        const title = btn.dataset.title || query;
         const bibtexB64 = btn.dataset.bibtex;
         let bibtex = '';
         try {
@@ -97,7 +115,9 @@ const Search = {
         }
 
         try {
-            const data = bibtex ? { bibtex, query } : { query };
+            // When no bibtex (S2 results), use the paper title for precise resolution
+            const resolveQuery = bibtex ? query : title;
+            const data = bibtex ? { bibtex, query: resolveQuery } : { query: resolveQuery };
             await API.addSearchResult(data);
             App.toast('Added to library', 'success');
             btn.textContent = 'Added';
@@ -106,7 +126,7 @@ const Search = {
         } catch (e) {
             App.toast('Failed to add: ' + e.message, 'error');
             btn.disabled = false;
-            btn.textContent = 'Add to Library';
+            btn.textContent = originalLabel;
         }
     },
 };
